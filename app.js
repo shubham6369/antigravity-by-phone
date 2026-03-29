@@ -1,4 +1,4 @@
-// Antigravity Mobile Command Center - Firebase Integration with Full Control
+// Antigravity Mobile Command Center - Firebase Integration with Live Mirroring
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp, deleteDoc, doc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 
@@ -21,6 +21,12 @@ const commandInput = document.getElementById('command-input');
 const agentStatePanel = document.getElementById('agent-state-panel');
 const agentStateText = document.getElementById('agent-state-text');
 const currentGoalText = document.getElementById('current-goal');
+
+// Mirror Elements
+const mirrorCard = document.getElementById('agent-mirror');
+const mirrorThought = document.getElementById('mirror-thought');
+const mirrorTool = document.getElementById('mirror-tool');
+const mirrorTime = document.getElementById('mirror-time');
 
 // Update Agent State UI
 function setAgentState(state, text) {
@@ -46,7 +52,7 @@ async function clearAllLogs() {
     if (!confirm("Are you sure you want to WIPE all logs?")) return;
     
     try {
-        const q = query(collection(db, "antigravity_logs"));
+        const q = collection(db, "antigravity_logs");
         const snapshot = await getDocs(q);
         const batch = writeBatch(db);
         
@@ -62,15 +68,12 @@ async function clearAllLogs() {
     }
 }
 
-// Expose functions to global scope for HTML onclick
 window.deleteLog = deleteLog;
 window.clearAllLogs = clearAllLogs;
 
-// Helper to append logs to UI with individual delete control
+// Helper to append logs to UI
 function appendLog(text, type = 'system', docId = null) {
     if (!consoleLogs) return;
-    
-    // Check if log already exists in UI (to prevent doubles on sync)
     if (docId && document.getElementById(`log-${docId}`)) return;
 
     const entry = document.createElement('div');
@@ -78,7 +81,6 @@ function appendLog(text, type = 'system', docId = null) {
     if (docId) entry.id = `log-${docId}`;
     
     const timestamp = new Date().toLocaleTimeString([], { hour12: false });
-    
     let deleteBtnHtml = docId ? `<button class="delete-btn" onclick="deleteLog('${docId}')">✕</button>` : '';
     
     entry.innerHTML = `
@@ -107,10 +109,6 @@ async function sendTask(taskText) {
             timestamp: serverTimestamp()
         });
         
-        setTimeout(() => {
-            setAgentState('working', `Working on: ${taskText}`);
-        }, 1000);
-
     } catch (e) {
         appendLog(`Error: ${e.message}`, 'error');
         setAgentState('idle', 'AGENT READY');
@@ -119,7 +117,6 @@ async function sendTask(taskText) {
 
 window.sendTask = sendTask;
 
-// Handle Form Submit
 commandForm.addEventListener('submit', (e) => {
     e.preventDefault();
     const task = commandInput.value;
@@ -128,8 +125,8 @@ commandForm.addEventListener('submit', (e) => {
 });
 
 // Real-time Logs Listener
-const q = query(collection(db, "antigravity_logs"), orderBy("timestamp", "asc"));
-onSnapshot(q, (snapshot) => {
+const qLogs = query(collection(db, "antigravity_logs"), orderBy("timestamp", "asc"));
+onSnapshot(qLogs, (snapshot) => {
     snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {
             const data = change.doc.data();
@@ -146,4 +143,26 @@ onSnapshot(q, (snapshot) => {
     });
 });
 
-console.log("Antigravity Control Dashboard Fully Initialized.");
+// Real-time AGENT MIRROR Listener
+onSnapshot(doc(db, "antigravity_mirror", "status"), (doc) => {
+    if (doc.exists()) {
+        const data = doc.data();
+        if (mirrorThought) mirrorThought.innerText = data.thought || "Idle";
+        if (mirrorTool) mirrorTool.innerText = data.tool || "None";
+        if (mirrorTime) {
+            const time = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleTimeString() : "Just now";
+            mirrorTime.innerText = `Synced: ${time}`;
+        }
+        
+        // Active pulsing effect
+        if (data.active) {
+            mirrorCard.classList.add('active');
+            setAgentState('working', data.thought || 'Active');
+        } else {
+            mirrorCard.classList.remove('active');
+            setAgentState('idle', 'AGENT READY');
+        }
+    }
+});
+
+console.log("Antigravity Mirror Dashboard Fully Initialized.");
