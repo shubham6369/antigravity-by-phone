@@ -20,17 +20,6 @@ const commandForm = document.getElementById('command-form');
 const commandInput = document.getElementById('command-input');
 const clearLogsBtn = document.getElementById('clear-logs');
 const statusText = document.getElementById('agent-status');
-const unlockBtn = document.getElementById('unlock-btn');
-const splashScreen = document.getElementById('splash-screen');
-
-// Handle Unlock
-unlockBtn.addEventListener('click', () => {
-    unlockBtn.textContent = 'SCANNING...';
-    setTimeout(() => {
-        splashScreen.classList.add('fade-out');
-        appendLog("User Authenticated. Access Granted.", "agent");
-    }, 1200);
-});
 
 // Helper to append logs to UI
 function appendLog(text, type = 'system') {
