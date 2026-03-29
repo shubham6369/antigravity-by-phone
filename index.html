@@ -14,41 +14,47 @@
                 <div class="system-tag">ANTIGRAVITY v1.0</div>
                 <div class="status-indicator">
                     <span class="ping-pulse"></span>
-                    <span id="terminal-status">TERMINAL: ONLINE</span>
+                    <span id="terminal-status">AGENT: READY</span>
                 </div>
             </div>
-            <h1>Command Center</h1>
+            <h1>Antigravity Remote</h1>
+            <div id="agent-state-panel" class="agent-state idle">
+                <div class="state-dot"></div>
+                <span id="agent-state-text">AGENT IDLE</span>
+            </div>
         </header>
 
-        <main>
-            <section class="metrics">
-                <div class="metric-card">
-                    <span class="label">Memory</span>
-                    <div class="bar-bg"><div class="bar-fill" style="width: 45%;"></div></div>
+        <main class="dashboard-grid">
+            <section class="metric-card">
+                <h3>Agent Memory</h3>
+                <div class="progress-container">
+                    <div class="progress-bar" style="width: 45%;"></div>
                 </div>
-                <div class="metric-card">
-                    <span class="label">CPU</span>
-                    <div class="bar-bg"><div class="bar-fill" style="width: 12%;"></div></div>
-                </div>
+                <p>Context: 12.4k tokens</p>
             </section>
-
-            <section class="console-wrapper">
-                <div class="console-header">
-                    <span>LIVE LOGS</span>
-                    <button id="clear-logs">Clear</button>
-                </div>
-                <div id="console-logs" class="console-content">
-                    <div class="log-entry system">System initialized. Ready for commands.</div>
-                </div>
-            </section>
-
-            <section class="quick-actions">
-                <button class="action-btn" data-cmd="Run Chartink Scan">Run Chartink Scan</button>
-                <button class="action-btn" data-cmd="Deploy Site">Deploy Site</button>
-                <button class="action-btn" data-cmd="Reset Agent">Reset Agent</button>
-                <button class="action-btn secondary" data-cmd="Stop">Stop</button>
+            
+            <section class="metric-card">
+                <h3>Active Goal</h3>
+                <p id="current-goal">Listening for tasks...</p>
             </section>
         </main>
+
+        <section class="terminal-section">
+            <div class="console-header">
+                <span>AGENT THOUGHT LOGS</span>
+                <button id="clear-logs">CLEAR</button>
+            </div>
+            <div id="console" class="console-content">
+                <!-- Logs here -->
+            </div>
+        </section>
+
+        <div class="quick-actions">
+            <button class="action-btn" onclick="sendTask('Build a login page')">Build UI</button>
+            <button class="action-btn" onclick="sendTask('Scan for bugs')">Scan Code</button>
+            <button class="action-btn" onclick="sendTask('Deploy to production')">Deploy</button>
+        </div>
+        <button class="action-btn secondary" data-cmd="Stop">Stop</button>
 
         <footer>
             <form id="command-form">

@@ -1,6 +1,5 @@
 // Antigravity Mobile Command Center - Firebase Integration
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-console.log("Antigravity Module Loaded.");
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -16,79 +15,93 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const consoleLogs = document.getElementById('console-logs');
+const consoleLogs = document.getElementById('console');
 const commandForm = document.getElementById('command-form');
 const commandInput = document.getElementById('command-input');
 const clearLogsBtn = document.getElementById('clear-logs');
-const statusText = document.getElementById('agent-status');
+const agentStatePanel = document.getElementById('agent-state-panel');
+const agentStateText = document.getElementById('agent-state-text');
+const currentGoalText = document.getElementById('current-goal');
+
+// Update Agent State UI
+function setAgentState(state, text) {
+    if (agentStatePanel) agentStatePanel.className = `agent-state ${state}`;
+    if (agentStateText) agentStateText.innerText = text.toUpperCase();
+    if (state !== 'idle' && currentGoalText) {
+        currentGoalText.innerText = text;
+    }
+}
 
 // Helper to append logs to UI
 function appendLog(text, type = 'system') {
+    if (!consoleLogs) return;
     const entry = document.createElement('div');
     entry.className = `log-entry ${type}`;
-    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    entry.textContent = `[${time}] ${text}`;
+    
+    const timestamp = new Date().toLocaleTimeString([], { hour12: false });
+    entry.innerHTML = `<span style="opacity: 0.5">[${timestamp}]</span> ${text}`;
+    
     consoleLogs.appendChild(entry);
     consoleLogs.scrollTop = consoleLogs.scrollHeight;
 }
 
-// Listen for logs from Firestore
-const logsQuery = query(collection(db, "antigravity_logs"), orderBy("timestamp", "desc"), limit(50));
-onSnapshot(logsQuery, (snapshot) => {
-    snapshot.docChanges().reverse().forEach((change) => {
-        if (change.type === "added") {
-            const data = change.doc.data();
-            appendLog(data.text, data.type || 'agent');
-        }
-    });
-});
-
-// Send command to Firestore
-async function sendCommand(text) {
-    if (!text.trim()) return;
+// Send Task to Antigravity
+async function sendTask(taskText) {
+    if (!taskText || !taskText.trim()) return;
     
-    appendLog(text, 'user');
+    appendLog(taskText, 'user');
+    setAgentState('thinking', 'Analyzing Task...');
+
     try {
         await addDoc(collection(db, "antigravity_commands"), {
-            text: text,
+            text: taskText,
             status: "pending",
+            type: "agent_task",
             timestamp: serverTimestamp()
         });
-        commandInput.value = '';
+        
+        setTimeout(() => {
+            setAgentState('working', `Working on: ${taskText}`);
+        }, 1000);
+
     } catch (e) {
-        appendLog("Failed to send command: " + e.message, 'error');
+        appendLog(`Error sending task: ${e.message}`, 'error');
+        setAgentState('idle', 'AGENT READY');
     }
 }
 
+// Attach sendTask to global window for onclick handlers
+window.sendTask = sendTask;
+
+// Handle Form Submit
 commandForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    sendCommand(commandInput.value);
+    const task = commandInput.value;
+    sendTask(task);
+    commandInput.value = '';
 });
 
-// Quick Action Buttons
-document.querySelectorAll('.action-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const cmd = btn.getAttribute('data-cmd');
-        sendCommand(cmd);
-        
-        // Custom logic for specific buttons
-        if (cmd === 'Run Chartink Scan') {
-            appendLog("Scanning large cap stocks...", "agent");
-            setTimeout(() => {
-                window.location.href = 'screener.html';
-            }, 1500);
+// Clear Logs
+clearLogsBtn.addEventListener('click', () => {
+    consoleLogs.innerHTML = '';
+    appendLog("Logs cleared.", "system");
+});
+
+// Real-time Logs Listener
+const q = query(collection(db, "antigravity_logs"), orderBy("timestamp", "desc"), limit(20));
+onSnapshot(q, (snapshot) => {
+    snapshot.docChanges().reverse().forEach((change) => {
+        if (change.type === "added") {
+            const data = change.doc.data();
+            appendLog(data.text, data.type);
+            
+            // If task completes, return to idle
+            if (data.text.includes("Task Completed") || data.text.includes("COMPLETED")) {
+                setAgentState('idle', 'AGENT READY');
+                currentGoalText.innerText = "Task finished. Standing by.";
+            }
         }
     });
 });
 
-clearLogsBtn.addEventListener('click', () => {
-    consoleLogs.innerHTML = '';
-    appendLog("Logs cleared locally.", "system");
-});
-
-// Simulate Metrics update
-setInterval(() => {
-    const cpuBar = document.querySelector('.metric-card:nth-child(2) .bar-fill');
-    const randomCpu = Math.floor(Math.random() * 20) + 5;
-    cpuBar.style.width = randomCpu + '%';
-}, 3000);
+console.log("Antigravity Module Fully Initialized.");
