@@ -1,12 +1,27 @@
-const { initializeApp } = require('firebase-admin/app');
+const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+const fs = require('fs');
+const path = require('path');
 
-const firebaseConfig = {
-    projectId: "antigravity-by-phone"
-};
+const serviceAccountPath = path.resolve(__dirname, 'service-account.json');
+const projectId = "antigravity-by-phone";
+
+let adminApp;
 
 try {
-    const adminApp = initializeApp(firebaseConfig);
+    if (fs.existsSync(serviceAccountPath)) {
+        console.log("✅ Using Service Account Key: service-account.json");
+        adminApp = initializeApp({
+            credential: cert(serviceAccountPath),
+            projectId: projectId
+        });
+    } else {
+        console.log("⚠️ No service-account.json found. Trying Default Credentials...");
+        adminApp = initializeApp({
+            projectId: projectId
+        });
+    }
+
     const db = getFirestore(adminApp);
 
     console.log(`\n-----------------------------------------`);
@@ -23,7 +38,6 @@ try {
                 const cmdDoc = change.doc;
                 const cmd = cmdDoc.data();
                 
-                // Print task in terminal for the agent to see
                 console.log(`\n[AGENT TASK RECEIVED]: ${cmd.text}`);
                 console.log(`Status: PENDING EXECUTION\n`);
 
@@ -40,5 +54,9 @@ try {
     });
 
 } catch (e) {
-    console.error("Agent Sync failed to start. Ensure you are logged into Firebase: `firebase login`", e.message);
+    console.error("\n❌ Agent Sync failed to start!");
+    console.log(`Error: ${e.message}`);
+    console.log(`\nTo fix this:`);
+    console.log(`1. Run 'firebase login' in your local terminal.`);
+    console.log(`2. OR download a Service Account Key (JSON) from Firebase Console and name it 'service-account.json'.\n`);
 }
