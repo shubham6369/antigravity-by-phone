@@ -1,55 +1,68 @@
-// Antigravity Agent Bridge (Node.js) - Run this in your workspace to sync with your phone.
-const { initializeApp, cert } = require('firebase-admin/app');
+const { initializeApp } = require('firebase-admin/app');
 const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-
-// Since we are in a local environment, we'll try to use the ADC or a service account if available.
-// NOTE: For the user, I'll recommend running regular `firebase login` first.
-// This is a placeholder for the bridge logic.
+const { exec } = require('child_process');
+const path = require('path');
 
 const firebaseConfig = {
     projectId: "antigravity-by-phone"
 };
 
-// Initialize Admin SDK (Assuming the user has ADC set up via firebase login)
-// If not, this script will need a service account key.
+let currentCwd = process.cwd();
+
 try {
     const adminApp = initializeApp(firebaseConfig);
     const db = getFirestore(adminApp);
 
-    console.log("--- Antigravity Agent Bridge Online ---");
-    console.log("Listening for commands from your phone...");
+    console.log(`\n-----------------------------------------`);
+    console.log(`🚀 ANTIGRAVITY REMOTE TERMINAL ACTIVE`);
+    console.log(`📁 CWD: ${currentCwd}`);
+    console.log(`-----------------------------------------\n`);
 
-    // Listen for new commands
     const commandsRef = db.collection('antigravity_commands');
     const query = commandsRef.where('status', '==', 'pending').orderBy('timestamp', 'asc');
 
     query.onSnapshot(snapshot => {
         snapshot.docChanges().forEach(async change => {
             if (change.type === 'added') {
-                const cmd = change.doc.data();
-                console.log(`\n[PHONE COMMAND RECEIVED]: ${cmd.text}`);
+                const cmdDoc = change.doc;
+                const cmd = cmdDoc.data();
                 
-                // Update status to 'executing'
-                await change.doc.ref.update({ status: 'executing' });
+                console.log(`\n[INCOMING]: ${cmd.text}`);
+                await cmdDoc.ref.update({ status: 'executing' });
 
-                // Simulate execution and log back to Firestore
-                await db.collection('antigravity_logs').add({
-                    text: `Executing: ${cmd.text}`,
-                    type: 'system',
-                    timestamp: FieldValue.serverTimestamp()
-                });
+                // Execute command in the local shell
+                exec(cmd.text, { cwd: currentCwd, shell: 'powershell.exe' }, async (error, stdout, stderr) => {
+                    let fullOutput = "";
+                    
+                    if (stdout) {
+                        console.log(stdout);
+                        fullOutput += stdout;
+                    }
+                    if (stderr) {
+                        console.error(stderr);
+                        fullOutput += `\nERROR: ${stderr}`;
+                    }
+                    if (error && !stderr) {
+                        fullOutput += `\nEXEC ERROR: ${error.message}`;
+                    }
 
-                // Here is where the agent would normally hook into the local environment.
-                // For now, we'll mark as completed.
-                setTimeout(async () => {
-                    await change.doc.ref.update({ status: 'completed' });
+                    // Handle 'cd' commands to update the persistent directory state
+                    if (cmd.text.trim().startsWith('cd ')) {
+                        const newDir = cmd.text.trim().substring(3).replace(/["']/g, '');
+                        currentCwd = path.resolve(currentCwd, newDir);
+                        fullOutput += `\n[DIRECTORY CHANGED]: ${currentCwd}`;
+                    }
+
+                    // Log output back to Firestore
                     await db.collection('antigravity_logs').add({
-                        text: `Task Completed: ${cmd.text}`,
-                        type: 'agent',
+                        text: fullOutput || "[COMMAND EXECUTED - NO OUTPUT]",
+                        type: stderr || error ? 'error' : 'agent',
                         timestamp: FieldValue.serverTimestamp()
                     });
+
+                    await cmdDoc.ref.update({ status: 'completed' });
                     console.log(`[COMPLETED]: ${cmd.text}`);
-                }, 2000);
+                });
             }
         });
     });
