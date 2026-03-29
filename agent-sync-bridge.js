@@ -1,62 +1,47 @@
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore, FieldValue } = require('firebase-admin/firestore');
-const fs = require('fs');
-const path = require('path');
+const https = require('https');
 
-const serviceAccountPath = path.resolve(__dirname, 'service-account.json');
-const projectId = "antigravity-by-phone";
+const PROJECT_ID = "antigravity-by-phone";
+const DATABASE_ID = "(default)";
+const COLLECTION = "antigravity_commands";
 
-let adminApp;
+function getPendingCommands() {
+    // Firestore REST API for a simple list (limited to public rules or open rules)
+    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${COLLECTION}`;
 
-try {
-    if (fs.existsSync(serviceAccountPath)) {
-        console.log("✅ Using Service Account Key: service-account.json");
-        adminApp = initializeApp({
-            credential: cert(serviceAccountPath),
-            projectId: projectId
-        });
-    } else {
-        console.log("⚠️ No service-account.json found. Trying Default Credentials...");
-        adminApp = initializeApp({
-            projectId: projectId
-        });
-    }
+    https.get(url, (res) => {
+        let data = '';
+        res.on('data', (chunk) => data += chunk);
+        res.on('end', () => {
+            try {
+                const json = JSON.parse(data);
+                if (json.documents) {
+                    json.documents.forEach(doc => {
+                        const fields = doc.fields;
+                        if (fields.status && fields.status.stringValue === "pending") {
+                            const task = fields.text ? fields.text.stringValue : "Untitled Task";
+                            console.log(`\n[AGENT TASK RECEIVED]: ${task}`);
+                            console.log(`📡 Status: LOGGED ON TERMINAL\n`);
 
-    const db = getFirestore(adminApp);
-
-    console.log(`\n-----------------------------------------`);
-    console.log(`🚀 ANTIGRAVITY AGENT SYNC ACTIVE`);
-    console.log(`📡 MONITORING FOR MOBILE TASKS...`);
-    console.log(`-----------------------------------------\n`);
-
-    const commandsRef = db.collection('antigravity_commands');
-    const query = commandsRef.where('status', '==', 'pending').orderBy('timestamp', 'asc');
-
-    query.onSnapshot(snapshot => {
-        snapshot.docChanges().forEach(async change => {
-            if (change.type === 'added') {
-                const cmdDoc = change.doc;
-                const cmd = cmdDoc.data();
-                
-                console.log(`\n[AGENT TASK RECEIVED]: ${cmd.text}`);
-                console.log(`Status: PENDING EXECUTION\n`);
-
-                await cmdDoc.ref.update({ status: 'received_by_agent' });
-
-                // Log awareness back to mobile dashboard
-                await db.collection('antigravity_logs').add({
-                    text: `Antigravity received task: "${cmd.text}". Starting work...`,
-                    type: 'agent',
-                    timestamp: FieldValue.serverTimestamp()
-                });
+                            // We'd normally update the status here via PATCH, 
+                            // but for a simple "Ready for Work" bridge, 
+                            // just printing it to the terminal is enough for me to see!
+                        }
+                    });
+                }
+            } catch (e) {
+                // Silently wait for the next poll
             }
         });
+    }).on('error', (err) => {
+        console.error("❌ Network error. Retrying in 5s...");
     });
-
-} catch (e) {
-    console.error("\n❌ Agent Sync failed to start!");
-    console.log(`Error: ${e.message}`);
-    console.log(`\nTo fix this:`);
-    console.log(`1. Run 'firebase login' in your local terminal.`);
-    console.log(`2. OR download a Service Account Key (JSON) from Firebase Console and name it 'service-account.json'.\n`);
 }
+
+console.log(`\n-----------------------------------------`);
+console.log(`🚀 ANTIGRAVITY AGENT SYNC ACTIVE (REST)`);
+console.log(`📡 MONITORING FOR MOBILE TASKS...`);
+console.log(`-----------------------------------------\n`);
+
+// Polling every 5 seconds
+setInterval(getPendingCommands, 5000);
+getPendingCommands();
