@@ -1,5 +1,6 @@
 // Antigravity Mobile Command Center - Firebase Integration
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
+console.log("Antigravity Module Loaded.");
 import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 
 const firebaseConfig = {
