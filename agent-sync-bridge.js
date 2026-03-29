@@ -25,14 +25,25 @@ function postLog(text, type = "system") {
         }
     };
 
-    const req = https.request(options, (res) => {});
-    req.on('error', (e) => console.error(`Error logging to Firestore: ${e.message}`));
+    const req = https.request(options, (res) => {
+        if (res.statusCode >= 400) {
+            let body = '';
+            res.on('data', d => body += d);
+            res.on('end', () => {
+                console.error(`❌ Firestore Sync Error (${res.statusCode}): ${body}`);
+            });
+        } else {
+            // Success
+        }
+    });
+    
+    req.on('error', (e) => console.error(`❌ Network error: ${e.message}`));
     req.write(postData);
     req.end();
 }
 
 function getPendingCommands() {
-    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${COMMANDS_COLLECTION}`;
+    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${COMMANDS_COLLECTION}?mask.fieldPaths=status&mask.fieldPaths=text`;
 
     https.get(url, (res) => {
         let data = '';
@@ -43,28 +54,33 @@ function getPendingCommands() {
                 if (json.documents) {
                     json.documents.forEach(doc => {
                         const fields = doc.fields;
-                        if (fields.status && fields.status.stringValue === "pending") {
+                        if (fields && fields.status && fields.status.stringValue === "pending") {
                             const task = fields.text ? fields.text.stringValue : "Untitled Task";
-                            console.log(`\n[AGENT TASK RECEIVED]: ${task}`);
+                            console.log(`\n✨ [MOBILE TASK RECEIVED]: ${task}`);
                             postLog(`Working on: ${task}`, "agent");
                             
-                            // Here we would PATCH the document to 'received', 
-                            // but for simplicity, the console output confirms it.
+                            // Log the receipt back to the dashboard immediately
+                            postLog(`✅ Antigravity is processing: "${task}"`, "agent");
                         }
                     });
                 }
-            } catch (e) {}
+            } catch (e) {
+                // Silently skip if response is malformed or empty
+            }
         });
+    }).on('error', (e) => {
+        console.error(`❌ Connection lost. Retrying...`);
     });
 }
 
-console.log(`\n-----------------------------------------`);
+console.log(`\n=========================================`);
 console.log(`🚀 ANTIGRAVITY AGENT SYNC ACTIVE`);
 console.log(`📡 MONITORING FOR MOBILE TASKS...`);
-console.log(`-----------------------------------------\n`);
+console.log(`=========================================\n`);
 
-// Initialize mobile sync
-postLog("TERMINAL: ONLINE. Ready for mobile tasks.", "system");
+// Initialize mobile sync with a visible startup log
+postLog("Agent Sync Bridge: CONNECTED. Ready for tasks.", "system");
 
-setInterval(getPendingCommands, 5000);
+// Polling every 3 seconds for faster response
+setInterval(getPendingCommands, 3000);
 getPendingCommands();

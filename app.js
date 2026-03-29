@@ -1,6 +1,6 @@
-// Antigravity Mobile Command Center - Firebase Integration
+// Antigravity Mobile Command Center - Firebase Integration with Full Control
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp, deleteDoc, doc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAN8gmDvohf52wvXMyIC9wh8ZtRRj6_EKc",
@@ -18,7 +18,6 @@ const db = getFirestore(app);
 const consoleLogs = document.getElementById('console');
 const commandForm = document.getElementById('command-form');
 const commandInput = document.getElementById('command-input');
-const clearLogsBtn = document.getElementById('clear-logs');
 const agentStatePanel = document.getElementById('agent-state-panel');
 const agentStateText = document.getElementById('agent-state-text');
 const currentGoalText = document.getElementById('current-goal');
@@ -32,14 +31,62 @@ function setAgentState(state, text) {
     }
 }
 
-// Helper to append logs to UI
-function appendLog(text, type = 'system') {
+// Global Delete Function for Logs
+async function deleteLog(docId) {
+    try {
+        await deleteDoc(doc(db, "antigravity_logs", docId));
+        console.log("Log deleted:", docId);
+    } catch (e) {
+        console.error("Delete failed:", e);
+    }
+}
+
+// Global Clear All Function
+async function clearAllLogs() {
+    if (!confirm("Are you sure you want to WIPE all logs?")) return;
+    
+    try {
+        const q = query(collection(db, "antigravity_logs"));
+        const snapshot = await getDocs(q);
+        const batch = writeBatch(db);
+        
+        snapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        
+        await batch.commit();
+        consoleLogs.innerHTML = '';
+        appendLog("All logs cleared from database.", "system");
+    } catch (e) {
+        console.error("Clear failed:", e);
+    }
+}
+
+// Expose functions to global scope for HTML onclick
+window.deleteLog = deleteLog;
+window.clearAllLogs = clearAllLogs;
+
+// Helper to append logs to UI with individual delete control
+function appendLog(text, type = 'system', docId = null) {
     if (!consoleLogs) return;
+    
+    // Check if log already exists in UI (to prevent doubles on sync)
+    if (docId && document.getElementById(`log-${docId}`)) return;
+
     const entry = document.createElement('div');
     entry.className = `log-entry ${type}`;
+    if (docId) entry.id = `log-${docId}`;
     
     const timestamp = new Date().toLocaleTimeString([], { hour12: false });
-    entry.innerHTML = `<span style="opacity: 0.5">[${timestamp}]</span> ${text}`;
+    
+    let deleteBtnHtml = docId ? `<button class="delete-btn" onclick="deleteLog('${docId}')">✕</button>` : '';
+    
+    entry.innerHTML = `
+        <div style="display:flex; justify-content:space-between; width:100%;">
+            <span><span style="opacity: 0.5; font-size: 0.7rem;">[${timestamp}]</span> ${text}</span>
+            ${deleteBtnHtml}
+        </div>
+    `;
     
     consoleLogs.appendChild(entry);
     consoleLogs.scrollTop = consoleLogs.scrollHeight;
@@ -65,12 +112,11 @@ async function sendTask(taskText) {
         }, 1000);
 
     } catch (e) {
-        appendLog(`Error sending task: ${e.message}`, 'error');
+        appendLog(`Error: ${e.message}`, 'error');
         setAgentState('idle', 'AGENT READY');
     }
 }
 
-// Attach sendTask to global window for onclick handlers
 window.sendTask = sendTask;
 
 // Handle Form Submit
@@ -81,27 +127,23 @@ commandForm.addEventListener('submit', (e) => {
     commandInput.value = '';
 });
 
-// Clear Logs
-clearLogsBtn.addEventListener('click', () => {
-    consoleLogs.innerHTML = '';
-    appendLog("Logs cleared.", "system");
-});
-
 // Real-time Logs Listener
-const q = query(collection(db, "antigravity_logs"), orderBy("timestamp", "desc"), limit(20));
+const q = query(collection(db, "antigravity_logs"), orderBy("timestamp", "asc"));
 onSnapshot(q, (snapshot) => {
-    snapshot.docChanges().reverse().forEach((change) => {
+    snapshot.docChanges().forEach((change) => {
         if (change.type === "added") {
             const data = change.doc.data();
-            appendLog(data.text, data.type);
+            appendLog(data.text, data.type, change.doc.id);
             
-            // If task completes, return to idle
             if (data.text.includes("Task Completed") || data.text.includes("COMPLETED")) {
                 setAgentState('idle', 'AGENT READY');
-                currentGoalText.innerText = "Task finished. Standing by.";
             }
+        }
+        if (change.type === "removed") {
+            const el = document.getElementById(`log-${change.doc.id}`);
+            if (el) el.remove();
         }
     });
 });
 
-console.log("Antigravity Module Fully Initialized.");
+console.log("Antigravity Control Dashboard Fully Initialized.");
