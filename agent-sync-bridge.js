@@ -2,11 +2,37 @@ const https = require('https');
 
 const PROJECT_ID = "antigravity-by-phone";
 const DATABASE_ID = "(default)";
-const COLLECTION = "antigravity_commands";
+const COMMANDS_COLLECTION = "antigravity_commands";
+const LOGS_COLLECTION = "antigravity_logs";
+
+// Helper to post a log to Firestore REST API
+function postLog(text, type = "system") {
+    const postData = JSON.stringify({
+        fields: {
+            text: { stringValue: text },
+            type: { stringValue: type },
+            timestamp: { timestampValue: new Date().toISOString() }
+        }
+    });
+
+    const options = {
+        hostname: 'firestore.googleapis.com',
+        path: `/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${LOGS_COLLECTION}`,
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Content-Length': Buffer.byteLength(postData)
+        }
+    };
+
+    const req = https.request(options, (res) => {});
+    req.on('error', (e) => console.error(`Error logging to Firestore: ${e.message}`));
+    req.write(postData);
+    req.end();
+}
 
 function getPendingCommands() {
-    // Firestore REST API for a simple list (limited to public rules or open rules)
-    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${COLLECTION}`;
+    const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${COMMANDS_COLLECTION}`;
 
     https.get(url, (res) => {
         let data = '';
@@ -20,28 +46,25 @@ function getPendingCommands() {
                         if (fields.status && fields.status.stringValue === "pending") {
                             const task = fields.text ? fields.text.stringValue : "Untitled Task";
                             console.log(`\n[AGENT TASK RECEIVED]: ${task}`);
-                            console.log(`📡 Status: LOGGED ON TERMINAL\n`);
-
-                            // We'd normally update the status here via PATCH, 
-                            // but for a simple "Ready for Work" bridge, 
-                            // just printing it to the terminal is enough for me to see!
+                            postLog(`Working on: ${task}`, "agent");
+                            
+                            // Here we would PATCH the document to 'received', 
+                            // but for simplicity, the console output confirms it.
                         }
                     });
                 }
-            } catch (e) {
-                // Silently wait for the next poll
-            }
+            } catch (e) {}
         });
-    }).on('error', (err) => {
-        console.error("❌ Network error. Retrying in 5s...");
     });
 }
 
 console.log(`\n-----------------------------------------`);
-console.log(`🚀 ANTIGRAVITY AGENT SYNC ACTIVE (REST)`);
+console.log(`🚀 ANTIGRAVITY AGENT SYNC ACTIVE`);
 console.log(`📡 MONITORING FOR MOBILE TASKS...`);
 console.log(`-----------------------------------------\n`);
 
-// Polling every 5 seconds
+// Initialize mobile sync
+postLog("TERMINAL: ONLINE. Ready for mobile tasks.", "system");
+
 setInterval(getPendingCommands, 5000);
 getPendingCommands();
