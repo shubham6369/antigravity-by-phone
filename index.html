@@ -2,81 +2,71 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Antigravity Command Center</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Antigravity | Remote Bridge</title>
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 </head>
-<body>
+<body class="dark-theme">
     <div class="app-container">
-        <header>
-            <div class="status-bar">
-                <div class="system-tag">ANTIGRAVITY v1.0</div>
-                <div class="status-indicator">
-                    <span class="ping-pulse"></span>
-                    <span id="terminal-status">AGENT: READY</span>
-                </div>
+        <!-- Status Bar -->
+        <header class="status-bar">
+            <div class="status-left">
+                <div id="status-indicator" class="status-dot active"></div>
+                <span id="agent-status-text">Agent Online</span>
             </div>
-            <h1>Antigravity Remote</h1>
-            <div id="agent-state-panel" class="agent-state idle">
-                <div class="state-dot"></div>
-                <span id="agent-state-text">AGENT IDLE</span>
+            <div class="status-right">
+                <button id="clear-logs" class="icon-btn" title="Clear Logs">
+                    <svg viewBox="0 0 24 24" width="18" height="18"><path fill="currentColor" d="M19 4h-3.5l-1-1h-5l-1 1H5v2h14V4zM6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12z"/></svg>
+                </button>
             </div>
         </header>
 
-        <main class="dashboard-grid">
-            <section class="metric-card">
-                <h3>Agent Memory</h3>
-                <div class="progress-container">
-                    <div class="progress-bar" style="width: 45%;"></div>
+        <!-- Digital Twin Mirror (Screen + Thoughts) -->
+        <main class="main-content">
+            <section id="mirror-container" class="mirror-panel">
+                <div class="mirror-header">
+                    <div class="badge">LIVE MIRROR</div>
+                    <div id="tool-display" class="tool-badge">Idle</div>
                 </div>
-                <p>Context: 12.4k tokens</p>
+                
+                <!-- NEW: Remote Screen Mirror -->
+                <div id="remote-container" class="remote-screen-wrapper">
+                    <img id="remote-screen" alt="Remote Desktop Mirror" src="">
+                    <div class="overlay-grid"></div>
+                </div>
+
+                <div id="thought-display" class="thought-bubble">
+                    Awaiting instructions...
+                </div>
             </section>
-            
-            <section class="metric-card">
-                <h3>Active Goal</h3>
-                <p id="current-goal">Listening for tasks...</p>
+
+            <!-- Real-time Log Console -->
+            <section class="console-panel">
+                <div class="panel-header">
+                    <h3>NEURAL LOGS</h3>
+                    <div class="scrolling-indicator"></div>
+                </div>
+                <div id="console-body" class="console-content">
+                    <!-- Logs stream here -->
+                </div>
             </section>
         </main>
 
-        <section id="agent-mirror" class="mirror-card">
-            <div class="mirror-header">
-                <div class="pulse-dot"></div>
-                <span>AGENT LIVE MIRROR</span>
-            </div>
-            <div id="mirror-thought" class="mirror-thought">Searching for optimal implementation...</div>
-            <div class="mirror-action">
-                <span>Tool: <b id="mirror-tool">Idle</b></span>
-                <span id="mirror-time">Synced: Just now</span>
-            </div>
-        </section>
-
-        <section class="terminal-section">
-            <div class="console-header">
-                <span>AGENT THOUGHT LOGS</span>
-                <button id="clear-all-btn" class="clear-all-btn" onclick="clearAllLogs()">CLEAR ALL</button>
-            </div>
-            <div id="console" class="console-content">
-                <!-- Logs here -->
-            </div>
-        </section>
-
-        <div class="quick-actions">
-            <button class="action-btn" onclick="sendTask('Build a login page')">Build UI</button>
-            <button class="action-btn" onclick="sendTask('Scan for bugs')">Scan Code</button>
-            <button class="action-btn" onclick="sendTask('Deploy to production')">Deploy</button>
-        </div>
-        <button class="action-btn secondary" data-cmd="Stop">Stop</button>
-
-        <footer>
-            <form id="command-form">
-                <input type="text" id="command-input" placeholder="Execute command..." autocomplete="off">
-                <button type="submit" id="send-btn">
-                    <svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+        <!-- Command Input -->
+        <footer class="input-area">
+            <form id="command-form" class="command-box">
+                <input type="text" id="command-input" placeholder="Transmit instruction..." autocomplete="off">
+                <button type="submit" class="send-btn">
+                    <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
                 </button>
             </form>
         </footer>
     </div>
+
+    <!-- Firebase Logic -->
     <script type="module" src="app.js"></script>
 </body>
 </html>

@@ -1,6 +1,17 @@
-// Antigravity Mobile Command Center - Firebase Integration with Live Mirroring
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-app.js";
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, limit, serverTimestamp, deleteDoc, doc, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/9.22.1/firebase-firestore.js";
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { 
+    getFirestore, 
+    collection, 
+    addDoc, 
+    onSnapshot, 
+    query, 
+    orderBy, 
+    limit, 
+    serverTimestamp, 
+    doc, 
+    getDocs, 
+    writeBatch 
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
 const firebaseConfig = {
   apiKey: "AIzaSyAN8gmDvohf52wvXMyIC9wh8ZtRRj6_EKc",
@@ -15,154 +26,197 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-const consoleLogs = document.getElementById('console');
-const commandForm = document.getElementById('command-form');
+// DOM Elements
+const statusDot = document.getElementById('status-indicator');
+const statusText = document.getElementById('agent-status-text');
+const thoughtDisplay = document.getElementById('thought-display');
+const toolDisplay = document.getElementById('tool-display');
+const mirrorContainer = document.getElementById('mirror-container');
+const consoleBody = document.getElementById('console-body');
 const commandInput = document.getElementById('command-input');
-const agentStatePanel = document.getElementById('agent-state-panel');
-const agentStateText = document.getElementById('agent-state-text');
-const currentGoalText = document.getElementById('current-goal');
+const clearLogsBtn = document.getElementById('clear-logs');
+const remoteScreen = document.getElementById('remote-screen');
+const remoteContainer = document.getElementById('remote-container');
+const commandForm = document.getElementById('command-form');
 
-// Mirror Elements
-const mirrorCard = document.getElementById('agent-mirror');
-const mirrorThought = document.getElementById('mirror-thought');
-const mirrorTool = document.getElementById('mirror-tool');
-const mirrorTime = document.getElementById('mirror-time');
+// State tracking
+let remoteResolution = { width: 1920, height: 1080 };
 
-// Update Agent State UI
-function setAgentState(state, text) {
-    if (agentStatePanel) agentStatePanel.className = `agent-state ${state}`;
-    if (agentStateText) agentStateText.innerText = text.toUpperCase();
-    if (state !== 'idle' && currentGoalText) {
-        currentGoalText.innerText = text;
-    }
-}
-
-// Global Delete Function for Logs
-async function deleteLog(docId) {
-    try {
-        await deleteDoc(doc(db, "antigravity_logs", docId));
-        console.log("Log deleted:", docId);
-    } catch (e) {
-        console.error("Delete failed:", e);
-    }
-}
-
-// Global Clear All Function
-async function clearAllLogs() {
-    if (!confirm("Are you sure you want to WIPE all logs?")) return;
+/**
+ * Updates the agent's visual state in the status bar
+ * @param {'idle' | 'thinking' | 'working'} state 
+ */
+function updateAgentUI(state) {
+    statusDot.className = 'status-dot';
     
-    try {
-        const q = collection(db, "antigravity_logs");
-        const snapshot = await getDocs(q);
-        const batch = writeBatch(db);
-        
-        snapshot.docs.forEach((doc) => {
-            batch.delete(doc.ref);
-        });
-        
-        await batch.commit();
-        consoleLogs.innerHTML = '';
-        appendLog("All logs cleared from database.", "system");
-    } catch (e) {
-        console.error("Clear failed:", e);
+    switch(state) {
+        case 'thinking':
+            statusDot.classList.add('pulsing');
+            statusText.textContent = 'Agent Thinking...';
+            mirrorContainer.classList.add('active');
+            break;
+        case 'working':
+            statusDot.classList.add('active');
+            statusText.textContent = 'Agent Working';
+            mirrorContainer.classList.add('active');
+            break;
+        default:
+            statusDot.classList.add('active');
+            if (!task) statusText.textContent = 'Agent Online';
+            mirrorContainer.classList.remove('active');
     }
 }
 
-window.deleteLog = deleteLog;
-window.clearAllLogs = clearAllLogs;
-
-// Helper to append logs to UI
-function appendLog(text, type = 'system', docId = null) {
-    if (!consoleLogs) return;
-    if (docId && document.getElementById(`log-${docId}`)) return;
-
+/**
+ * Appends a log entry to the virtual console
+ */
+function appendLog(text, type = 'system') {
     const entry = document.createElement('div');
     entry.className = `log-entry ${type}`;
-    if (docId) entry.id = `log-${docId}`;
     
-    const timestamp = new Date().toLocaleTimeString([], { hour12: false });
-    let deleteBtnHtml = docId ? `<button class="delete-btn" onclick="deleteLog('${docId}')">✕</button>` : '';
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    entry.innerHTML = `<span style="opacity:0.4; font-size: 0.7rem; margin-right: 8px;">[${time}]</span> ${text}`;
     
-    entry.innerHTML = `
-        <div style="display:flex; justify-content:space-between; width:100%;">
-            <span><span style="opacity: 0.5; font-size: 0.7rem;">[${timestamp}]</span> ${text}</span>
-            ${deleteBtnHtml}
-        </div>
-    `;
+    consoleBody.appendChild(entry);
+    consoleBody.scrollTop = consoleBody.scrollHeight;
     
-    consoleLogs.appendChild(entry);
-    consoleLogs.scrollTop = consoleLogs.scrollHeight;
-}
-
-// Send Task to Antigravity
-async function sendTask(taskText) {
-    if (!taskText || !taskText.trim()) return;
-    
-    appendLog(taskText, 'user');
-    setAgentState('thinking', 'Analyzing Task...');
-
-    try {
-        await addDoc(collection(db, "antigravity_commands"), {
-            text: taskText,
-            status: "pending",
-            type: "agent_task",
-            timestamp: serverTimestamp()
-        });
-        
-    } catch (e) {
-        appendLog(`Error: ${e.message}`, 'error');
-        setAgentState('idle', 'AGENT READY');
+    // Auto-prune old UI elements
+    if (consoleBody.children.length > 100) {
+        consoleBody.removeChild(consoleBody.firstChild);
     }
 }
 
-window.sendTask = sendTask;
+// 1. Listen for Agent Mirror State (Digital Twin)
+onSnapshot(doc(db, "antigravity_mirror", "status"), (snapshot) => {
+    if (snapshot.exists()) {
+        const data = snapshot.data();
+        
+        // Show EVERYTHING happening
+        thoughtDisplay.textContent = data.thought || "Awaiting task...";
+        toolDisplay.textContent = data.tool ? `Tool: ${data.tool}` : "Idle";
+        
+        if (data.active) {
+            const uiState = data.tool !== 'Idle' ? 'working' : 'idle';
+            updateAgentUI(uiState, data.currentTask);
+            
+            // Sync resolution for input mapping
+            if (data.screenWidth && data.screenHeight) {
+                remoteResolution.width = data.screenWidth;
+                remoteResolution.height = data.screenHeight;
+            }
+        } else {
+            updateAgentUI('offline');
+        }
+    } else {
+        updateAgentUI('offline');
+    }
+});
+
+// 2. Listen for Real-time Logs
+const qLogs = query(collection(db, "antigravity_logs"), orderBy("timestamp", "desc"), limit(50));
+onSnapshot(qLogs, (snapshot) => {
+    // Current approach: clear and re-render for simplicity on small log sets
+    // In production, we'd handle docChanges() for performance
+    consoleBody.innerHTML = '';
+    const logs = [];
+    snapshot.forEach(doc => logs.push(doc.data()));
+    
+    // Reverse because we queried desc for limit, but want to display chronological
+    logs.reverse();
+    
+    logs.forEach(log => {
+        const entry = document.createElement('div');
+        entry.className = `log-entry ${log.type || 'agent'}`;
+        
+        const time = log.timestamp ? log.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '...';
+        
+        // Handle multi-line output nicely
+        const formattedText = log.text.replace(/\n/g, '<br>');
+        entry.innerHTML = `<span style="opacity:0.3; font-size: 0.7rem; margin-right: 8px;">[${time}]</span> ${formattedText}`;
+        
+        consoleBody.appendChild(entry);
+    });
+    
+    consoleBody.scrollTop = consoleBody.scrollHeight;
+});
+
+// 3. Command Sending Logic
+async function sendCommand(text) {
+    if (!text.trim()) return;
+    
+    appendLog(text, 'user');
+    updateAgentUI('thinking');
+    
+    try {
+        await addDoc(collection(db, "antigravity_commands"), {
+            text: text,
+            status: "pending",
+            timestamp: serverTimestamp()
+        });
+        commandInput.value = '';
+    } catch (err) {
+        appendLog(`Failed to send: ${err.message}`, 'error');
+        updateAgentUI('idle');
+    }
+}
 
 commandForm.addEventListener('submit', (e) => {
     e.preventDefault();
-    const task = commandInput.value;
-    sendTask(task);
-    commandInput.value = '';
+    sendCommand(commandInput.value);
 });
 
-// Real-time Logs Listener
-const qLogs = query(collection(db, "antigravity_logs"), orderBy("timestamp", "asc"));
-onSnapshot(qLogs, (snapshot) => {
-    snapshot.docChanges().forEach((change) => {
-        if (change.type === "added") {
-            const data = change.doc.data();
-            appendLog(data.text, data.type, change.doc.id);
-            
-            if (data.text.includes("Task Completed") || data.text.includes("COMPLETED")) {
-                setAgentState('idle', 'AGENT READY');
-            }
-        }
-        if (change.type === "removed") {
-            const el = document.getElementById(`log-${change.doc.id}`);
-            if (el) el.remove();
-        }
-    });
+// 4. Clear Logs (Admin Function)
+clearLogsBtn.addEventListener('click', async () => {
+    if (!confirm("Clear overall logs?")) return;
+    
+    try {
+        const snapshot = await getDocs(collection(db, "antigravity_logs"));
+        const batch = writeBatch(db);
+        snapshot.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+        appendLog("Remote history purged.", "system");
+    } catch (err) {
+        appendLog("Purge failed: " + err.message, "error");
+    }
 });
 
-// Real-time AGENT MIRROR Listener
-onSnapshot(doc(db, "antigravity_mirror", "status"), (doc) => {
-    if (doc.exists()) {
-        const data = doc.data();
-        if (mirrorThought) mirrorThought.innerText = data.thought || "Idle";
-        if (mirrorTool) mirrorTool.innerText = data.tool || "None";
-        if (mirrorTime) {
-            const time = data.timestamp ? new Date(data.timestamp.toDate()).toLocaleTimeString() : "Just now";
-            mirrorTime.innerText = `Synced: ${time}`;
-        }
-        
-        // Active pulsing effect
-        if (data.active) {
-            mirrorCard.classList.add('active');
-            setAgentState('working', data.thought || 'Active');
-        } else {
-            mirrorCard.classList.remove('active');
-            setAgentState('idle', 'AGENT READY');
+// 5. Listen for Screen Mirror
+onSnapshot(doc(db, "antigravity_mirror", "screen"), (snapshot) => {
+    if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.data) {
+            remoteScreen.src = data.data;
         }
     }
 });
 
-console.log("Antigravity Mirror Dashboard Fully Initialized.");
+// 6. Handle Remote Input (Clicks)
+remoteScreen.addEventListener('click', async (e) => {
+    const rect = remoteScreen.getBoundingClientRect();
+    
+    // Calculate relative position (0.0 to 1.0)
+    const relX = (e.clientX - rect.left) / rect.width;
+    const relY = (e.clientY - rect.top) / rect.height;
+
+    // Convert to target desktop resolution
+    const desktopX = Math.round(relX * remoteResolution.width);
+    const desktopY = Math.round(relY * remoteResolution.height);
+
+    appendLog(`Sending Click: ${desktopX}, ${desktopY}`, 'system');
+
+    try {
+        await addDoc(collection(db, "antigravity_remote_inputs"), {
+            type: 'click',
+            x: desktopX,
+            y: desktopY,
+            status: 'pending',
+            timestamp: serverTimestamp()
+        });
+    } catch (err) {
+        appendLog(`Input Failed: ${err.message}`, 'error');
+    }
+});
+
+// Initial boot
+appendLog("Antigravity Neural Link Established.", "system");
+updateAgentUI('idle');

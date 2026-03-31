@@ -11,6 +11,9 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "firebase-admin": "^13.7.0"
+    "firebase": "^12.11.0",
+    "firebase-admin": "^13.7.0",
+    "jimp": "^1.6.0",
+    "screenshot-desktop": "^1.15.3"
   }
 }
